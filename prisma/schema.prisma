@@ -1,0 +1,533 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  BROKERAGE_AGENT
+  HOSPITALITY_MANAGER
+  PROPERTY_MANAGER
+  OPERATIONS
+  CONTENT_MANAGER
+  FINANCE
+  CUSTOMER
+  OWNER
+}
+
+enum PropertyType {
+  APARTMENT
+  VILLA
+  TOWNHOUSE
+  RESIDENTIAL_BUILDING
+  RESIDENTIAL_LAND
+  DUPLEX
+  PENTHOUSE
+  COMPOUND_UNIT
+  SERVICED_APARTMENT
+  STUDIO
+  HOTEL_ROOM
+}
+
+enum Transaction {
+  SALE
+  RENT
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING_PAYMENT
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum OccupancyStatus {
+  HELD
+  BOOKED
+  BLOCKED
+  MAINTENANCE
+}
+
+enum PricingRuleType {
+  BASE_RATE
+  WEEKEND_RATE
+  DATE_RANGE_OVERRIDE
+  SEASONAL_RATE
+  SPECIAL_EVENT_RATE
+  LENGTH_OF_STAY_DISCOUNT
+  PROMO_CODE
+  CLEANING_FEE
+  EXTRA_GUEST_FEE
+  TAX
+  MANUAL_OVERRIDE
+}
+
+enum LeadType {
+  BUYER
+  TENANT
+  SELLER
+  LANDLORD
+  PROPERTY_MANAGEMENT
+  HOSPITALITY
+  GENERAL
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  VIEWING_SCHEDULED
+  PROPOSAL_SENT
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum SubmissionStatus {
+  NEW
+  CONTACTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CONVERTED
+}
+
+enum ProviderType {
+  PMS
+  CHANNEL_MANAGER
+  AIRBNB
+  BOOKING_COM
+  OTHER
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String     @unique
+  emailVerified DateTime?
+  name          String
+  role          Role       @default(CUSTOMER)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  owner         Owner?
+  leads         Lead[]
+  bookings      Booking[]
+  favorites     Favorite[]
+  auditLogs     AuditLog[]
+}
+
+model Owner {
+  id         String          @id @default(uuid()) @db.Uuid
+  userId     String?         @unique @db.Uuid
+  user       User?           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  name       String
+  email      String?
+  phone      String
+  properties PropertyOwner[]
+}
+
+model PropertyOwner {
+  propertyId           String   @db.Uuid
+  ownerId              String   @db.Uuid
+  ownershipBasisPoints Int
+  property             Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  owner                Owner    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@id([propertyId, ownerId])
+  @@index([ownerId])
+}
+
+model City {
+  id        String     @id
+  nameAr    String
+  nameEn    String
+  districts District[]
+}
+
+model District {
+  id         String     @id
+  cityId     String
+  city       City       @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  nameAr     String
+  nameEn     String
+  properties Property[]
+
+  @@index([cityId])
+}
+
+model Property {
+  id               String                    @id @default(uuid()) @db.Uuid
+  districtId       String
+  district         District                  @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  type             PropertyType
+  titleAr          String
+  titleEn          String
+  descriptionAr    String
+  descriptionEn    String
+  addressAr        String
+  addressEn        String
+  latitude         Decimal                   @db.Decimal(9, 6)
+  longitude        Decimal                   @db.Decimal(9, 6)
+  publicLatitude   Decimal?                  @db.Decimal(9, 6)
+  publicLongitude  Decimal?                  @db.Decimal(9, 6)
+  timezone         String                    @default("Asia/Riyadh")
+  bedrooms         Int
+  bathrooms        Int
+  areaSquareMeters Int
+  furnished        Boolean                   @default(false)
+  amenities        String[]
+  isDemo           Boolean                   @default(false)
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  images           PropertyImage[]
+  listings         BrokerageListing[]
+  units            HospitalityUnit[]
+  owners           PropertyOwner[]
+  leads            Lead[]
+  externalMappings ExternalPropertyMapping[]
+
+  @@index([districtId, type])
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  url        String
+  altAr      String
+  altEn      String
+  position   Int      @default(0)
+
+  @@unique([propertyId, position])
+}
+
+model BrokerageListing {
+  id          String            @id @default(uuid()) @db.Uuid
+  reference   String            @unique
+  propertyId  String            @db.Uuid
+  property    Property          @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  transaction Transaction
+  priceMinor  Int
+  status      PublicationStatus @default(DRAFT)
+  featured    Boolean           @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  favorites   Favorite[]
+
+  @@index([status, transaction, priceMinor])
+  @@index([propertyId])
+}
+
+model Favorite {
+  userId    String           @db.Uuid
+  listingId String           @db.Uuid
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   BrokerageListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@id([userId, listingId])
+}
+
+model HospitalityUnit {
+  id               String                @id @default(uuid()) @db.Uuid
+  reference        String                @unique
+  propertyId       String                @db.Uuid
+  property         Property              @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  nameAr           String
+  nameEn           String
+  status           PublicationStatus     @default(DRAFT)
+  beds             Int
+  maxGuests        Int
+  includedGuests   Int                   @default(2)
+  baseRateMinor    Int
+  minimumNights    Int                   @default(1)
+  featured         Boolean               @default(false)
+  rulesAr          String
+  rulesEn          String
+  cancellationAr   String
+  cancellationEn   String
+  checkInTime      String                @default("15:00")
+  checkOutTime     String                @default("11:00")
+  quotes           BookingQuote[]
+  bookings         Booking[]
+  occupancy        Occupancy[]
+  pricingRules     PricingRule[]
+  dailyRates       DailyRate[]
+  externalMappings ExternalUnitMapping[]
+
+  @@index([propertyId, status])
+}
+
+model PricingRule {
+  id            String          @id @default(uuid()) @db.Uuid
+  unitId        String          @db.Uuid
+  unit          HospitalityUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  type          PricingRuleType
+  name          String
+  priority      Int             @default(0)
+  amountMinor   Int?
+  basisPoints   Int?
+  startDate     DateTime?       @db.Date
+  endDate       DateTime?       @db.Date
+  minimumNights Int?
+  weekdays      Int[]
+  promoCode     String?
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+
+  @@index([unitId, active, priority])
+}
+
+model DailyRate {
+  unitId        String          @db.Uuid
+  date          DateTime        @db.Date
+  unit          HospitalityUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  rateMinor     Int
+  minimumNights Int             @default(1)
+
+  @@id([unitId, date])
+}
+
+model BookingQuote {
+  id         String          @id @default(uuid()) @db.Uuid
+  unitId     String          @db.Uuid
+  unit       HospitalityUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  checkIn    DateTime        @db.Date
+  checkOut   DateTime        @db.Date
+  guests     Int
+  promoCode  String?
+  totalMinor Int
+  breakdown  Json
+  expiresAt  DateTime
+  createdAt  DateTime        @default(now())
+  booking    Booking?
+
+  @@index([expiresAt])
+}
+
+model Booking {
+  id               String                 @id @default(uuid()) @db.Uuid
+  reference        String                 @unique
+  unitId           String                 @db.Uuid
+  unit             HospitalityUnit        @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  quoteId          String                 @unique @db.Uuid
+  quote            BookingQuote           @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  customerId       String?                @db.Uuid
+  customer         User?                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status           BookingStatus          @default(PENDING)
+  paymentStatus    PaymentStatus          @default(UNPAID)
+  checkIn          DateTime               @db.Date
+  checkOut         DateTime               @db.Date
+  guests           Int
+  guestName        String
+  guestEmail       String
+  guestPhone       String
+  nationality      String?
+  notes            String?
+  totalMinor       Int
+  breakdown        Json
+  accessTokenHash  String                 @unique
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  occupancy        Occupancy?
+  history          BookingStatusHistory[]
+  externalMappings ExternalReservation[]
+
+  @@index([unitId, checkIn, checkOut])
+  @@index([customerId])
+  @@index([status, checkIn])
+}
+
+model BookingStatusHistory {
+  id        String        @id @default(uuid()) @db.Uuid
+  bookingId String        @db.Uuid
+  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  status    BookingStatus
+  actorId   String?       @db.Uuid
+  note      String?
+  createdAt DateTime      @default(now())
+
+  @@index([bookingId, createdAt])
+}
+
+// All unavailable intervals share one table, so one exclusion constraint protects every writer.
+model Occupancy {
+  id        String          @id @default(uuid()) @db.Uuid
+  unitId    String          @db.Uuid
+  unit      HospitalityUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  bookingId String?         @unique @db.Uuid
+  booking   Booking?        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  startDate DateTime        @db.Date
+  endDate   DateTime        @db.Date
+  status    OccupancyStatus
+  expiresAt DateTime?
+  reason    String?
+
+  @@index([unitId, startDate, endDate])
+}
+
+model Lead {
+  id           String              @id @default(uuid()) @db.Uuid
+  name         String
+  phone        String
+  email        String?
+  type         LeadType
+  source       String
+  status       LeadStatus          @default(NEW)
+  propertyId   String?             @db.Uuid
+  property     Property?           @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  assignedToId String?             @db.Uuid
+  assignedTo   User?               @relation(fields: [assignedToId], references: [id], onDelete: Restrict)
+  details      Json
+  followUpAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  activities   LeadActivity[]
+  submission   PropertySubmission?
+
+  @@index([status, followUpAt])
+  @@index([phone, createdAt])
+  @@index([assignedToId])
+  @@index([propertyId])
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  leadId    String   @db.Uuid
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  actorId   String?  @db.Uuid
+  note      String
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model PropertySubmission {
+  id        String           @id @default(uuid()) @db.Uuid
+  leadId    String           @unique @db.Uuid
+  lead      Lead             @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  status    SubmissionStatus @default(NEW)
+  details   Json
+  imageKeys String[]
+  createdAt DateTime         @default(now())
+}
+
+model ContentPage {
+  key       String   @id
+  contentAr Json
+  contentEn Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String   @db.Uuid
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action     String
+  entityType String
+  entityId   String
+  changes    Json
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+}
+
+model ExternalConnection {
+  id              String                    @id @default(uuid()) @db.Uuid
+  provider        ProviderType
+  name            String
+  enabled         Boolean                   @default(false)
+  secretReference String?
+  properties      ExternalPropertyMapping[]
+  units           ExternalUnitMapping[]
+  reservations    ExternalReservation[]
+  jobs            SyncJob[]
+}
+
+model ExternalPropertyMapping {
+  connectionId String             @db.Uuid
+  externalId   String
+  propertyId   String             @db.Uuid
+  connection   ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  property     Property           @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+
+  @@id([connectionId, externalId])
+  @@unique([connectionId, propertyId])
+}
+
+model ExternalUnitMapping {
+  connectionId String             @db.Uuid
+  externalId   String
+  unitId       String             @db.Uuid
+  connection   ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  unit         HospitalityUnit    @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@id([connectionId, externalId])
+  @@unique([connectionId, unitId])
+}
+
+model ExternalReservation {
+  connectionId String             @db.Uuid
+  externalId   String
+  bookingId    String             @db.Uuid
+  connection   ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  booking      Booking            @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@id([connectionId, externalId])
+  @@unique([connectionId, bookingId])
+}
+
+model SyncJob {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   ExternalConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  operation    String
+  status       SyncStatus         @default(PENDING)
+  attempts     Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  logs         SyncLog[]
+
+  @@index([status, createdAt])
+}
+
+model SyncLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  jobId     String   @db.Uuid
+  job       SyncJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  code      String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+}
+
+model ReferenceCounter {
+  prefix String @id
+  value  Int    @default(0)
+}
