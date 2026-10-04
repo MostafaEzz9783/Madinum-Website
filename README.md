@@ -61,6 +61,8 @@ Keep the development PostgreSQL connection string in ignored `.env` as `DATABASE
 
 After configuring a development database, run `pnpm db:generate`, `pnpm db:migrate`, and `pnpm db:seed`. Run `pnpm test` for domain/integration tests. Demo seeding is idempotent and refuses to overwrite non-demo inventory.
 
+On Vercel, use `pnpm run build`; it generates the ignored Prisma client before compiling Next.js. Configure `DATABASE_URL` for a hosted PostgreSQL database in the deployment environment. The local 127.0.0.1 database is not accessible from Vercel. Apply migrations separately with `pnpm db:migrate` against the intended database; builds do not migrate or seed data.
+
 Reservation prices use SAR minor units and checkout-exclusive calendar dates. Quotes expire after 15 minutes; submission rechecks price and inventory transactionally. PENDING requests hold inventory until a staff decision (the administrative workflow is still pending). A hashed access token protects guest confirmation; its HTTP-only cookie lasts 24 hours. No email confirmation or payment is sent/collected.
 
 Cleaning fees use the arrival date, lodging discounts require full-stay applicability, and extra guest fees are nightly. A stay crossing different configured tax rates is refused for staff review rather than incorrectly taxed. Production tax rules and legal policies require business configuration.
